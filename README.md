@@ -8,7 +8,6 @@ The build process is using Gradle and is already configured to use the currently
 
 For each of the exercises, we already provide a package with empty classes as either `.java` (for Java) or `.kt` (for Kotlin) files.
 You can choose to implement either of them and our JUnit tests will pick the correct one to test, but please keep all your code which you write for your solution exactly in these packages.
-The project is also ready to start each exercise as a CLI application, if you want to test your implementations with your own input data.
 Finally, for easier submission, we included a build task, which packs your implementation files (and only these in the belonging packages) as `.zip` files, which you can upload in Moodle.
 
 ### Setup
@@ -34,10 +33,6 @@ Simply open this folder in the IDE and it should automatically get picked up as 
 The most important build tasks we want to use are:
 - `gradle test` to start the provided test suite test your solutions.
 - `gradle packExercise<X>` to pack your implementation for exercise <X> in a `.zip` file (will be written in the project root folder) for submission.
-- `gradle run` to start a command line interface for each exercise class, in which you can load your own input data to play around with.*
-- `gradle shadowJar` to build an executable `.jar` file with the CLI from the run task above, which you can then run using `java -jar ./build/libs/dbs2exercises.jar <arguments>`.
-
-* We also provided `./run.sh` scripts for easier execution, which internally configure the Gradle run tasks with the given arguments, which you otherwise would have to add manually to the build task.
 
 ### Running without IDE
 
