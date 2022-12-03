@@ -4,76 +4,96 @@ import de.hpi.dbs2.ChosenImplementation
 import de.hpi.dbs2.dbms.*
 import de.hpi.dbs2.dbms.utils.BlockSorter
 import de.hpi.dbs2.exercise1.SortOperation
+import java.util.PriorityQueue
 import kotlin.math.ceil
-import kotlin.math.max
-import kotlin.math.min
 
 @ChosenImplementation(true)
 class TPMMSKotlin(
     manager: BlockManager,
     sortColumnIndex: Int
 ) : SortOperation(manager, sortColumnIndex) {
-    override fun estimatedIOCost(relation: Relation): Int = TODO()
+
+    private val memorySize = blockManager.usedBlocks + blockManager.freeBlocks
+    inner class SortedBlockList(
+        private val sortedBlocks: MutableList<Block>
+    ) {
+        private var loadedBlockIndex: Int = 0
+        private var currentTupleIndex: Int = 0
+
+        fun loadFirst(): Unit {
+            blockManager.load(sortedBlocks[loadedBlockIndex])
+        }
+
+        fun getCurrentTuple(): Tuple = sortedBlocks[loadedBlockIndex][currentTupleIndex]
+        fun saveTuple(sortedBlockLists: MutableSet<SortedBlockList>, outputBlock: Block, output: BlockOutput): Unit {
+            val currentBlock = sortedBlocks[loadedBlockIndex]
+
+            outputBlock.append(getCurrentTuple())
+
+            if (currentBlock.size > currentTupleIndex + 1) {
+                currentTupleIndex++
+            } else {
+                blockManager.release(currentBlock, false)
+
+                if (sortedBlocks.size > loadedBlockIndex + 1) {
+                    currentTupleIndex = 0
+                    loadedBlockIndex++
+                    blockManager.load(sortedBlocks[loadedBlockIndex])
+                } else {
+                    sortedBlockLists.remove(this)
+                }
+            }
+
+            if (outputBlock.isFull()) {
+                output.output(outputBlock)
+            }
+        }
+    }
+
+    // if the result is saved on disk: 4 * relation.estimatedSize
+    override fun estimatedIOCost(relation: Relation): Int = 3 * relation.estimatedSize
 
     override fun sort(relation: Relation, output: BlockOutput) {
-        val maxBlocksPerList = blockManager.freeBlocks
-        // one block has to be reserved for the output block
-        val maxSortedLists = blockManager.freeBlocks - 1
-
-        if (maxBlocksPerList * maxSortedLists < relation.estimatedSize) {
+        if (relation.estimatedSize > blockManager.freeBlocks * (blockManager.freeBlocks - 1)) {
             throw RelationSizeExceedsCapacityException();
         }
 
-        val listCount = min(maxSortedLists, relation.estimatedSize)
-        val blocksPerList = ceil(relation.estimatedSize / listCount.toFloat()).toInt()
+        val sortedBlockLists = mutableSetOf<SortedBlockList>()
 
-        val iterator = relation.iterator()
-        val comparator = relation.columns.getColumnComparator(sortColumnIndex)
-        val lists : List<MutableList<Block>> = List<MutableList<Block>>(listCount) { mutableListOf<Block>() }
-
-        for(listIndex : Int in 0 until listCount) {
-            val currentList = lists[listIndex]
-            repeat(blocksPerList) {
-                if (iterator.hasNext()) currentList.add(blockManager.load(iterator.next()))
-            }
-            BlockSorter.sort(relation, currentList, comparator)
-
-            for (blockIndex in 0 until currentList.size) {
-                currentList[blockIndex] = blockManager.release(currentList[blockIndex], true)!!
-            }
-        }
-
-        val listIterators = (0 until listCount).map { lists[it].iterator() }
-        val listIndices : MutableSet<Int> = (0 until listCount).toMutableSet()
-
-        var outputBlock : Block = blockManager.allocate(true)
-        val loadedBlocks = ((0 until listCount).map { blockManager.load(listIterators[it].next()) }).toMutableList()
-        val blockIterators = ((0 until listCount).map { loadedBlocks[it].iterator() }).toMutableList()
-        val currentTuples = mutableMapOf<Tuple, Int>()
-        for(index in 0 until listCount) currentTuples[blockIterators[index].next()] = index
-
-        while (listIndices.isNotEmpty()) {
-            val minTuple = currentTuples.minOfWith(comparator) { entry -> entry.key }
-            val index = currentTuples[minTuple]!!
-            currentTuples.remove(minTuple)
-
-            outputBlock.append(minTuple)
-            if(outputBlock.isFull()) output.output(outputBlock)
-
-            if(!blockIterators[index].hasNext()) {
-                blockManager.release(loadedBlocks[index], false)
-
-                if(listIterators[index].hasNext()) {
-                    loadedBlocks[index] = blockManager.load(listIterators[index].next())
-                    blockIterators[index] = loadedBlocks[index].iterator()
-                } else {
-                    listIndices.remove(index)
-                    continue
+        relation
+            .chunked(blockManager.freeBlocks)
+            .forEach { blockList ->
+                // while there is free memory load blocks into memory
+                blockList.forEach { block ->
+                    blockManager.load(block)
                 }
+
+                // sort block in memory
+                BlockSorter.sort(relation, blockList, relation.columns.getColumnComparator(sortColumnIndex))
+
+                // write blocks back to storage and save reference as List inside sortedLists
+                val savedBlocks = mutableListOf<Block>()
+                blockList.forEach { block ->
+                    savedBlocks.add(blockManager.release(block, true)!!)
+                }
+                sortedBlockLists.add(SortedBlockList(savedBlocks))
+
             }
-            currentTuples[blockIterators[index].next()] = index
+
+        // load the first block of each list and start comparing the tuples
+        // write everything back to memory and commit the block to output
+        val outputBlock = blockManager.allocate(true)
+        val comparator = relation.columns.getColumnComparator(sortColumnIndex)
+        sortedBlockLists.forEach { it.loadFirst() }
+
+        while (sortedBlockLists.size > 0) {
+            var listWithMinTuple = sortedBlockLists.minWith(
+                compareBy(comparator) { list : SortedBlockList -> list.getCurrentTuple() }
+            )
+
+            listWithMinTuple.saveTuple(sortedBlockLists, outputBlock, output)
         }
-        if(!outputBlock.isEmpty()) output.output(outputBlock)
+
         blockManager.release(outputBlock, false)
     }
 }
