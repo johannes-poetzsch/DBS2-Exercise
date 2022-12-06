@@ -142,17 +142,15 @@ class DBMS(
             override fun close() {
                 release(this, false)
             }
-
+            
             override fun toString(): String =
-                if (isLoaded())
-                    tuples.joinToString(
-                        ",",
-                        prefix = "Block[loaded=true]{",
-                        postfix = "\n}"
-                    ) {
-                        "\n  $it"
-                    }
-                else "Block[loaded=false]"
+                _tuples.joinToString(
+                    ",",
+                    prefix = "Block[loaded=${isLoaded()}]{",
+                    postfix = "\n}"
+                ) {
+                    "\n  $it"
+                }
         }
     }
 
