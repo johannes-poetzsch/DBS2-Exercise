@@ -2,7 +2,6 @@ package de.hpi.dbs2.dbms
 
 import com.google.common.collect.Sets
 import de.hpi.dbs2.dbms.utils.IOCostTracker
-import java.io.InputStream
 
 class DBMS(
     val totalBlocks: Int,
@@ -11,6 +10,9 @@ class DBMS(
     private val BLOCK_MANAGER = BlockManagerImpl()
     val blockManager: BlockManager get() = BLOCK_MANAGER
 
+    /**
+     * @return a new and empty relation with the given [columnDefinition].
+     */
     fun createRelation(
         blockManager: BlockManager,
         columnDefinition: ColumnDefinition,
@@ -19,54 +21,32 @@ class DBMS(
         columnDefinition,
     )
 
-    /**
-     * Creates a new relation and fills it with tuples from the given file
-     * by appending block references (not loaded in memory!) for them.
-     *
-     * The given file will not be modified.
-     *
-     * The relation's blocks can be loaded into memory using the BlockManager.
-     */
-    fun loadRelation(
-        blockManager: BlockManager,
-        columnDefinition: ColumnDefinition,
-        inputStream: InputStream,
-    ): Relation = RelationImpl(
-        blockManager,
-        columnDefinition,
-    ).apply {
-        discoverTuples(inputStream)
-    }
-
-    fun createOutputRelation(
-        blockManager: BlockManager,
-        columnDefinition: ColumnDefinition,
-    ): OutputRelation = RelationImpl(
-        blockManager,
-        columnDefinition,
-    )
-
     var ioCostTracker = object : IOCostTracker {}
-    class IOCostTrackerImpl: IOCostTracker {
+
+    class IOCostTrackerImpl : IOCostTracker {
         override var inputCost: Int = 0
         override var outputCost: Int = 0
 
         override fun doInput() {
             inputCost++
         }
+
         override fun doOutput() {
             outputCost++
         }
+
+        override fun toString(): String = "CostTracker[i=$inputCost,o=$outputCost,io=$ioCost]"
     }
-    fun trackIOCost(context: IOCostTracker.() -> Unit): IOCostTracker
-        = IOCostTrackerImpl().also {
+
+    fun trackIOCost(context: IOCostTracker.() -> Unit): IOCostTracker =
+        IOCostTrackerImpl().also {
             val prevTracker = ioCostTracker
             ioCostTracker = it
             it.context()
             ioCostTracker = prevTracker
         }
 
-    private open inner class BlockManagerImpl : BlockManager {
+    private inner class BlockManagerImpl : BlockManager {
         override val usedBlocks: Int get() = activeMap.size
         override val freeBlocks: Int get() = totalBlocks - usedBlocks
 
@@ -142,7 +122,7 @@ class DBMS(
             override fun close() {
                 release(this, false)
             }
-            
+
             override fun toString(): String =
                 _tuples.joinToString(
                     ",",
@@ -154,77 +134,10 @@ class DBMS(
         }
     }
 
-    context(Relation)
-    private class TupleImpl : Tuple {
-        private val values: Array<Any?> = arrayOfNulls(columns.columnCount)
-
-        override val columnCount: Int get() = values.size
-
-        override operator fun get(columnIndex: Int): Any? = values[columnIndex]
-
-        override operator fun set(columnIndex: Int, value: Any?) {
-            require(columns.getColumnType(columnIndex).clazz.isInstance(value)) {
-                "column type \"${columns.getColumnType(columnIndex).clazz.simpleName}\" does not match object type \"${value?.javaClass?.simpleName}\""
-            }
-            values[columnIndex] = value
-        }
-
-        override fun iterator(): Iterator<Any?> = values.iterator()
-
-        override fun copyInto(other: Tuple) {
-            require(other.columnCount == this.columnCount)
-            repeat(columnCount) { columnIndex ->
-                other[columnIndex] = this[columnIndex]
-            }
-        }
-
-        override fun toString(): String {
-            return values.contentToString()
-        }
-    }
-
     private inner class RelationImpl(
         val blockManager: BlockManager,
         override val columns: ColumnDefinition,
-    ) : OutputRelation {
-        fun discoverTuples(
-            inputStream: InputStream
-        ) {
-            fun appendNewBlock() = blockManager.allocate(false)
-                .also {
-                    blocks.add(it)
-                    blockManager.load(it)
-                }
-
-            var currentBlock =
-                if (blocks.isEmpty()) appendNewBlock()
-                else blocks.last()
-                    .also { blockManager.load(it) }
-            inputStream.bufferedReader().use { reader ->
-                reader.lineSequence().forEach { line ->
-                    if (currentBlock.isFull()) {
-                        currentBlock.close()
-                        currentBlock = appendNewBlock()
-                    }
-                    val tuple = createTuple().also {
-                        val values = line.split(",")
-                        for (i in values.indices) {
-                            it[i] = columns.getColumnType(i).fromString(values[i].trim())
-                        }
-                    }
-                    currentBlock.append(tuple)
-                }
-            }
-            currentBlock.close()
-        }
-
-        override fun output(outputBlock: Block) {
-            blocks.add((blockManager as BlockManagerImpl).copyBlock(outputBlock))
-            outputBlock.clear()
-        }
-
-        override fun createTuple(): Tuple = TupleImpl()
-
+    ) : Relation {
         private val blocks = mutableListOf<Block>()
 
         override fun clear() {
@@ -234,8 +147,16 @@ class DBMS(
             blocks.clear()
         }
 
+        override fun estimatedBlockCount(): Int = blocks.size
         override fun iterator(): Iterator<Block> = blocks.iterator()
 
-        override val estimatedSize: Int get() = blocks.size
+        private val blockOutput = BlockOutputImpl()
+        override fun getBlockOutput(): BlockOutput = blockOutput
+        private inner class BlockOutputImpl : BlockOutput {
+            override fun move(outputBlock: Block) {
+                blocks.add(outputBlock)
+                blockManager.release(outputBlock, false)
+            }
+        }
     }
 }

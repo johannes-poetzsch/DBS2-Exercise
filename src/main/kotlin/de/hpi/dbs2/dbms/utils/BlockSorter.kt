@@ -1,7 +1,6 @@
 package de.hpi.dbs2.dbms.utils
 
 import de.hpi.dbs2.dbms.Block
-import de.hpi.dbs2.dbms.Relation
 import de.hpi.dbs2.dbms.Tuple
 
 /**
@@ -11,7 +10,7 @@ object BlockSorter {
     /**
      * sorts the given blocks' tuples "in-place" by the given column index
      */
-    fun sort(relation: Relation, blocks: List<Block>, tupleComparator: Comparator<Tuple>) {
+    fun sort(blocks: List<Block>, tupleComparator: Comparator<Tuple>) {
         val blockSize = blocks.first().size
         blocks
             .flatten()

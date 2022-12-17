@@ -1,8 +1,8 @@
 package exercise1
 
 import de.hpi.dbs2.ChosenImplementation
-import de.hpi.dbs2.dbms.*
-import de.hpi.dbs2.dbms.utils.BlockSorter
+import de.hpi.dbs2.dbms.BlockManager
+import de.hpi.dbs2.dbms.Relation
 import de.hpi.dbs2.exercise1.SortOperation
 import java.util.PriorityQueue
 import kotlin.math.ceil

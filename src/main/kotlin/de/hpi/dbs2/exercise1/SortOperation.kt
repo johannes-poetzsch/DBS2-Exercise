@@ -4,23 +4,23 @@ import de.hpi.dbs2.dbms.*
 
 abstract class SortOperation(
     override val blockManager: BlockManager,
+    /**
+     * The column index by which to sort the tuples.
+     */
     val sortColumnIndex: Int
 ) : UnaryOperation {
-    override fun execute(inputRelation: Relation, outputRelation: OutputRelation) {
+    override fun execute(
+        inputRelation: Relation,
+        outputRelation: Relation
+    ) {
         sort(inputRelation, outputRelation)
     }
 
     /**
-     * @param output Outputs all tuples in the output block to the next operation.
-     * The block will be [Block.clear]ed after calling this method.
+     * Sorts all tuples in the given relation by their values in column [sortColumnIndex].
      */
     abstract fun sort(
-        relation: Relation,
-        output: BlockOutput
+        inputRelation: Relation,
+        outputRelation: Relation
     )
-
-    /**
-     * Relation is larger than the given sort algorithm can handle.
-     */
-    class RelationSizeExceedsCapacityException : IllegalArgumentException()
 }

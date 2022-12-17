@@ -1,0 +1,6 @@
+out/
+build/
+log/
+target/
+.gradle
+.gradletasknamecache

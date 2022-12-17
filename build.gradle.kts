@@ -1,11 +1,12 @@
+import com.github.benmanes.gradle.versions.updates.DependencyUpdatesTask
 import org.gradle.configurationcache.extensions.capitalized
 import org.jetbrains.kotlin.gradle.tasks.KotlinJvmCompile
 
 plugins {
-    kotlin("jvm") version "1.7.20"
+    kotlin("jvm") version "1.7.22"
     id("java")
 
-    id("com.github.ben-manes.versions") version "0.42.0"
+    id("com.github.ben-manes.versions") version "0.44.0"
     id("org.jetbrains.dokka") version "1.7.20"
     idea
 }
@@ -34,7 +35,7 @@ dependencies {
 
     testImplementation(kotlin("test-junit5"))
     testImplementation("org.junit.jupiter:junit-jupiter-engine:5.9.1")
-    testImplementation("io.kotest:kotest-assertions-core:5.5.3")
+    testImplementation("io.kotest:kotest-assertions-core:5.5.4")
 }
 
 kotlin {
@@ -59,10 +60,17 @@ tasks {
             freeCompilerArgs = listOf("-Xcontext-receivers")
         }
     }
+    withType<DependencyUpdatesTask> {
+        val unstable = Regex("^.*?(?:alpha|beta|unstable|ea).*\$", RegexOption.IGNORE_CASE)
+        rejectVersionIf {
+            candidate.version.matches(unstable)
+        }
+    }
     listOf(
         "exercise0",
         "exercise1",
         "exercise2",
+        "exercise3",
     ).forEach { exerciseDescriptor ->
         register<Zip>("pack${exerciseDescriptor.capitalized()}") {
             archiveFileName.set("group$groupIdentifier-$exerciseDescriptor.zip")
