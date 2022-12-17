@@ -7,11 +7,11 @@ import de.hpi.dbs2.exercise1.SortOperation
 import java.util.PriorityQueue
 import kotlin.math.ceil
 
-@ChosenImplementation(true)
+@ChosenImplementation(false)
 class TPMMSKotlin(
     manager: BlockManager,
     sortColumnIndex: Int
-) : SortOperation(manager, sortColumnIndex) {
+) : SortOperation(manager, sortColumnIndex) {/*
 
     private val memorySize = blockManager.usedBlocks + blockManager.freeBlocks
     inner class SortedBlockList(
@@ -48,13 +48,13 @@ class TPMMSKotlin(
                 output.output(outputBlock)
             }
         }
-    }
+    }*/
 
     // if the result is saved on disk: 4 * relation.estimatedSize
-    override fun estimatedIOCost(relation: Relation): Int = 3 * relation.estimatedSize
+    override fun estimatedIOCost(relation: Relation): Int = 3 * relation.estimatedBlockCount();
 
-    override fun sort(relation: Relation, output: BlockOutput) {
-        if (relation.estimatedSize > blockManager.freeBlocks * (blockManager.freeBlocks - 1)) {
+    override fun sort(inputRelation: Relation, outputRelation: Relation) {
+        /*if (relation.estimatedSize > blockManager.freeBlocks * (blockManager.freeBlocks - 1)) {
             throw RelationSizeExceedsCapacityException();
         }
 
@@ -94,6 +94,6 @@ class TPMMSKotlin(
             listWithMinTuple.saveTuple(sortedBlockLists, outputBlock, output)
         }
 
-        blockManager.release(outputBlock, false)
+        blockManager.release(outputBlock, false)*/
     }
 }
